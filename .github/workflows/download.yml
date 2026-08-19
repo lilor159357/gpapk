@@ -1,0 +1,35 @@
+name: Download APK via apkeep
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'App Package Name (e.g. com.whatsapp)'
+        required: true
+        default: 'com.whatsapp'
+
+jobs:
+  download-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create output directory
+        run: mkdir -p ./apks
+
+      - name: Download apkeep tool
+        run: |
+          curl -L -o apkeep https://github.com/EFForg/apkeep/releases/latest/download/apkeep-x86_64-unknown-linux-gnu
+          chmod +x apkeep
+
+      - name: Download APK from Google Play
+        env:
+          GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+          AAS_TOKEN: ${{ secrets.AAS_TOKEN }}
+        run: |
+          ./apkeep -a "${{ github.event.inputs.package_name }}" -d google-play -e "$GOOGLE_EMAIL" -t "$AAS_TOKEN" ./apks
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.package_name }}-apk
+          path: ./apks/*
