@@ -1,16 +1,12 @@
-name: Download Full APK via GitHub Actions
+name: Download Universal APK
 
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Package Name (or type "whatsapp-official" for full direct APK)'
+        description: 'Package Name (e.g. com.whatsapp, com.spotify.music)'
         required: true
         default: 'com.whatsapp'
-      arch:
-        description: 'Architecture (e.g. armeabi-v7a, arm64-v8a, universal)'
-        required: true
-        default: 'armeabi-v7a'
 
 jobs:
   download-apk:
@@ -20,30 +16,20 @@ jobs:
       - name: Create output directory
         run: mkdir -p ./apks
 
-      - name: Download WhatsApp Official (Universal 147MB)
-        if: ${{ github.event.inputs.package_name == 'com.whatsapp' || github.event.inputs.package_name == 'whatsapp-official' }}
-        run: |
-          echo "Downloading official full Universal WhatsApp APK..."
-          curl -L -H "User-Agent: Mozilla/5.0 (Android; Mobile)" \
-               -o ./apks/com.whatsapp.apk \
-               "https://www.whatsapp.com/android/current/WhatsApp.apk"
-
-      - name: Download apkeep (for other apps)
-        if: ${{ github.event.inputs.package_name != 'com.whatsapp' && github.event.inputs.package_name != 'whatsapp-official' }}
+      - name: Download apkeep
         run: |
           curl -L -o apkeep https://github.com/EFForg/apkeep/releases/latest/download/apkeep-x86_64-unknown-linux-gnu
           chmod +x apkeep
 
-      - name: Download APK via APKPure with specific Arch
-        if: ${{ github.event.inputs.package_name != 'com.whatsapp' && github.event.inputs.package_name != 'whatsapp-official' }}
+      - name: Download Full Universal APK
         run: |
           ./apkeep -a "${{ github.event.inputs.package_name }}" \
                    -d apk-pure \
-                   -o "arch=${{ github.event.inputs.arch }}" \
+                   -o "arch=arm64-v8a;armeabi-v7a;armeabi;x86;x86_64" \
                    ./apks
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-full-apk
+          name: ${{ github.event.inputs.package_name }}-universal
           path: ./apks/*
