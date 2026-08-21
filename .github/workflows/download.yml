@@ -36,7 +36,13 @@ jobs:
           Build.DEVICE=walleye
           Build.MANUFACTURER=Google
           Build.PRODUCT=walleye
+          Platforms=arm64-v8a,armeabi-v7a,armeabi
           NativePlatforms=arm64-v8a,armeabi-v7a,armeabi
+          Locales=en_US,en_GB
+          GL.Extensions=GL_EXT_debug_marker
+          GL.Version=196610
+          Features=android.hardware.touchscreen
+          SharedLibraries=android.test.base
           EOF
 
           cat <<EOF > ./apks/32.properties
@@ -49,7 +55,13 @@ jobs:
           Build.DEVICE=sailfish
           Build.MANUFACTURER=Google
           Build.PRODUCT=sailfish
+          Platforms=armeabi-v7a,armeabi
           NativePlatforms=armeabi-v7a,armeabi
+          Locales=en_US,en_GB
+          GL.Extensions=GL_EXT_debug_marker
+          GL.Version=196610
+          Features=android.hardware.touchscreen
+          SharedLibraries=android.test.base
           EOF
 
       - name: Download 64-bit splits from Google Play
@@ -78,7 +90,7 @@ jobs:
 
       - name: Merge downloaded splits into Universal XAPK
         run: |
-          # 1. חילוץ מקבצי apks או xapk במקרה ש-apkeep ארז אותם כך
+          # 1. חילוץ מקבצי apks או xapk
           for dir in ./apks/64 ./apks/32; do
             for f in $dir/*.apks $dir/*.xapk; do
               if [ -f "$f" ]; then
@@ -88,14 +100,14 @@ jobs:
             done
           done
           
-          # 2. העתקת כל קבצי ה-APK הבודדים (ללא כפילויות) לתיקייה האוניברסלית
+          # 2. איסוף לתיקייה האוניברסלית
           find ./apks/64 -name "*.apk" -exec cp -n {} ./apks/universal/ \;
           find ./apks/32 -name "*.apk" -exec cp -n {} ./apks/universal/ \;
           
-          # 3. יצירת manifest.json
+          # 3. יצירת מניפסט
           echo '{"package_name":"${{ github.event.inputs.package_name }}"}' > ./apks/universal/manifest.json
           
-          # 4. דחיסה לקובץ XAPK סופי
+          # 4. דחיסה
           cd ./apks/universal
           zip -r ../${{ github.event.inputs.package_name }}-universal.xapk ./*
 
