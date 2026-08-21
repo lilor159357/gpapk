@@ -1,4 +1,4 @@
-name: Download Universal APK
+name: Download Universal APK (Google Play)
 
 on:
   workflow_dispatch:
@@ -13,23 +13,94 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create output directory
-        run: mkdir -p ./apks
+      - name: Create working directories
+        run: |
+          mkdir -p ./apks/64
+          mkdir -p ./apks/32
+          mkdir -p ./apks/universal
 
       - name: Download apkeep
         run: |
           curl -L -o apkeep https://github.com/EFForg/apkeep/releases/latest/download/apkeep-x86_64-unknown-linux-gnu
           chmod +x apkeep
 
-      - name: Download Full Universal APK
+      - name: Generate Device Properties (64-bit & 32-bit)
+        run: |
+          cat <<EOF > ./apks/64.properties
+          [default]
+          Build.VERSION.SDK_INT=30
+          Build.VERSION.RELEASE=11
+          Build.HARDWARE=walleye
+          Build.BRAND=google
+          Build.MODEL=Pixel 2
+          Build.DEVICE=walleye
+          Build.MANUFACTURER=Google
+          Build.PRODUCT=walleye
+          NativePlatforms=arm64-v8a,armeabi-v7a,armeabi
+          EOF
+
+          cat <<EOF > ./apks/32.properties
+          [default]
+          Build.VERSION.SDK_INT=30
+          Build.VERSION.RELEASE=11
+          Build.HARDWARE=sailfish
+          Build.BRAND=google
+          Build.MODEL=Pixel
+          Build.DEVICE=sailfish
+          Build.MANUFACTURER=Google
+          Build.PRODUCT=sailfish
+          NativePlatforms=armeabi-v7a,armeabi
+          EOF
+
+      - name: Download 64-bit splits from Google Play
+        env:
+          GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+          AAS_TOKEN: ${{ secrets.AAS_TOKEN }}
         run: |
           ./apkeep -a "${{ github.event.inputs.package_name }}" \
-                   -d apk-pure \
-                   -o "arch=arm64-v8a;armeabi-v7a;armeabi;x86;x86_64" \
-                   ./apks
+                   -d google-play \
+                   -e "$GOOGLE_EMAIL" \
+                   -t "$AAS_TOKEN" \
+                   -o "device=default,split_apk=true,device_properties_file=./apks/64.properties" \
+                   ./apks/64
 
-      - name: Upload APK as Artifact
+      - name: Download 32-bit splits from Google Play
+        env:
+          GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+          AAS_TOKEN: ${{ secrets.AAS_TOKEN }}
+        run: |
+          ./apkeep -a "${{ github.event.inputs.package_name }}" \
+                   -d google-play \
+                   -e "$GOOGLE_EMAIL" \
+                   -t "$AAS_TOKEN" \
+                   -o "device=default,split_apk=true,device_properties_file=./apks/32.properties" \
+                   ./apks/32
+
+      - name: Merge downloaded splits into Universal XAPK
+        run: |
+          # 1. חילוץ מקבצי apks או xapk במקרה ש-apkeep ארז אותם כך
+          for dir in ./apks/64 ./apks/32; do
+            for f in $dir/*.apks $dir/*.xapk; do
+              if [ -f "$f" ]; then
+                unzip -o "$f" -d "$dir"
+                rm "$f"
+              fi
+            done
+          done
+          
+          # 2. העתקת כל קבצי ה-APK הבודדים (ללא כפילויות) לתיקייה האוניברסלית
+          find ./apks/64 -name "*.apk" -exec cp -n {} ./apks/universal/ \;
+          find ./apks/32 -name "*.apk" -exec cp -n {} ./apks/universal/ \;
+          
+          # 3. יצירת manifest.json
+          echo '{"package_name":"${{ github.event.inputs.package_name }}"}' > ./apks/universal/manifest.json
+          
+          # 4. דחיסה לקובץ XAPK סופי
+          cd ./apks/universal
+          zip -r ../${{ github.event.inputs.package_name }}-universal.xapk ./*
+
+      - name: Upload Universal XAPK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-universal
-          path: ./apks/*
+          name: ${{ github.event.inputs.package_name }}-universal-gplay
+          path: ./apks/*.xapk
